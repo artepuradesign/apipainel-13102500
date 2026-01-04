@@ -193,3 +193,73 @@ export const deleteAdminCategory = async (id: number): Promise<void> => {
     throw new Error(data.error || 'Erro ao excluir categoria');
   }
 };
+
+// ==================== PEDIDOS ====================
+
+export interface AdminPedido {
+  id: number;
+  numero: string;
+  nome_cliente: string;
+  email_cliente: string;
+  telefone_cliente?: string;
+  total: number;
+  status: string;
+  forma_pagamento: string;
+  created_at: string;
+  itens?: Array<{
+    id: number;
+    nome: string;
+    quantidade: number;
+    preco_unitario: number;
+  }>;
+}
+
+export interface AdminStats {
+  totalVendas: number;
+  totalPedidos: number;
+  totalProdutos: number;
+  totalCategorias: number;
+}
+
+export const fetchAdminPedidos = async (limite = 50, pagina = 1): Promise<{ pedidos: AdminPedido[]; total: number }> => {
+  const response = await authFetch(`${ADMIN_API_BASE}/pedidos.php?limite=${limite}&pagina=${pagina}`);
+  const data = await response.json();
+  
+  if (!data.success) {
+    throw new Error(data.error || 'Erro ao buscar pedidos');
+  }
+  
+  return { pedidos: data.data.pedidos, total: data.data.total };
+};
+
+export const fetchAdminStats = async (): Promise<AdminStats> => {
+  // Buscar produtos, pedidos e categorias em paralelo
+  const [produtosRes, pedidosRes, categoriasRes] = await Promise.all([
+    authFetch(`${ADMIN_API_BASE}/produtos.php`),
+    authFetch(`${ADMIN_API_BASE}/pedidos.php?limite=1000`),
+    authFetch(`${ADMIN_API_BASE}/categorias.php`),
+  ]);
+  
+  const [produtosData, pedidosData, categoriasData] = await Promise.all([
+    produtosRes.json(),
+    pedidosRes.json(),
+    categoriasRes.json(),
+  ]);
+  
+  const produtos = produtosData.success ? produtosData.data : [];
+  const pedidos = pedidosData.success ? pedidosData.data.pedidos : [];
+  const categorias = categoriasData.success ? categoriasData.data : [];
+  
+  // Calcular total de vendas (pedidos com status pago, preparando, enviado ou entregue)
+  const statusPagos = ['pago', 'preparando', 'enviado', 'entregue'];
+  const totalVendas = pedidos
+    .filter((p: AdminPedido) => statusPagos.includes(p.status))
+    .reduce((acc: number, p: AdminPedido) => acc + Number(p.total || 0), 0);
+  
+  return {
+    totalVendas,
+    totalPedidos: pedidos.length,
+    totalProdutos: produtos.length,
+    totalCategorias: categorias.length,
+  };
+};
