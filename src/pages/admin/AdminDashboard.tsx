@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Package,
   ShoppingCart,
   DollarSign,
-  Users,
   LogOut,
   Plus,
   List,
@@ -14,6 +15,7 @@ import {
   Clock,
   FolderTree,
 } from "lucide-react";
+import { fetchAdminStats, fetchAdminPedidos, AdminPedido } from "@/services/adminApi";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -38,6 +40,22 @@ const AdminDashboard = () => {
     }
   }, [navigate]);
 
+  // Buscar estatísticas
+  const { data: stats, isLoading: loadingStats } = useQuery({
+    queryKey: ["admin-stats"],
+    queryFn: fetchAdminStats,
+    staleTime: 2 * 60 * 1000, // 2 minutos
+    retry: 2,
+  });
+
+  // Buscar pedidos recentes
+  const { data: pedidosData, isLoading: loadingPedidos } = useQuery({
+    queryKey: ["admin-pedidos-recentes"],
+    queryFn: () => fetchAdminPedidos(5, 1),
+    staleTime: 2 * 60 * 1000,
+    retry: 2,
+  });
+
   const handleLogout = () => {
     sessionStorage.removeItem("adminToken");
     sessionStorage.removeItem("adminUser");
@@ -46,42 +64,64 @@ const AdminDashboard = () => {
     navigate("/admin/login");
   };
 
-  const stats = [
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value);
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      aguardando_pagamento: "Aguardando",
+      pendente: "Pendente",
+      pago: "Pago",
+      preparando: "Preparando",
+      enviado: "Enviado",
+      entregue: "Entregue",
+      cancelado: "Cancelado",
+    };
+    return labels[status] || status;
+  };
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      aguardando_pagamento: "bg-yellow-100 text-yellow-700",
+      pendente: "bg-yellow-100 text-yellow-700",
+      pago: "bg-green-100 text-green-700",
+      preparando: "bg-blue-100 text-blue-700",
+      enviado: "bg-purple-100 text-purple-700",
+      entregue: "bg-green-100 text-green-700",
+      cancelado: "bg-red-100 text-red-700",
+    };
+    return colors[status] || "bg-gray-100 text-gray-700";
+  };
+
+  const statsCards = [
     {
       title: "Total de Vendas",
-      value: "R$ 125.430,00",
+      value: stats ? formatCurrency(stats.totalVendas) : "R$ 0,00",
       icon: DollarSign,
-      change: "+12.5%",
       color: "text-green-500",
     },
     {
       title: "Pedidos",
-      value: "156",
+      value: stats?.totalPedidos?.toString() ?? "0",
       icon: ShoppingCart,
-      change: "+8.2%",
       color: "text-blue-500",
     },
     {
       title: "Produtos",
-      value: "48",
+      value: stats?.totalProdutos?.toString() ?? "0",
       icon: Package,
-      change: "+3",
       color: "text-purple-500",
     },
     {
-      title: "Clientes",
-      value: "1.234",
-      icon: Users,
-      change: "+24",
+      title: "Categorias",
+      value: stats?.totalCategorias?.toString() ?? "0",
+      icon: FolderTree,
       color: "text-orange-500",
     },
-  ];
-
-  const recentOrders = [
-    { id: "001", customer: "João Silva", product: "iPhone 14 Pro Max", value: "R$ 6.499,00", status: "Pago" },
-    { id: "002", customer: "Maria Santos", product: "MacBook Air M2", value: "R$ 8.999,00", status: "Pendente" },
-    { id: "003", customer: "Pedro Costa", product: "iPad Pro 11", value: "R$ 5.499,00", status: "Pago" },
-    { id: "004", customer: "Ana Oliveira", product: "Apple Watch Series 9", value: "R$ 3.299,00", status: "Enviado" },
   ];
 
   return (
@@ -139,17 +179,17 @@ const AdminDashboard = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat) => (
+          {statsCards.map((stat) => (
             <Card key={stat.title}>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">{stat.title}</p>
-                    <p className="text-2xl font-bold mt-1">{stat.value}</p>
-                    <p className={`text-sm mt-1 ${stat.color}`}>
-                      <TrendingUp className="w-3 h-3 inline mr-1" />
-                      {stat.change}
-                    </p>
+                    {loadingStats ? (
+                      <Skeleton className="h-8 w-24 mt-1" />
+                    ) : (
+                      <p className="text-2xl font-bold mt-1">{stat.value}</p>
+                    )}
                   </div>
                   <div className={`p-3 rounded-full bg-muted ${stat.color}`}>
                     <stat.icon className="w-6 h-6" />
@@ -172,42 +212,49 @@ const AdminDashboard = () => {
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">Pedido</th>
-                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">Cliente</th>
-                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">Produto</th>
-                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">Valor</th>
-                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentOrders.map((order) => (
-                    <tr key={order.id} className="border-b hover:bg-muted/50">
-                      <td className="p-3 font-medium">#{order.id}</td>
-                      <td className="p-3">{order.customer}</td>
-                      <td className="p-3">{order.product}</td>
-                      <td className="p-3">{order.value}</td>
-                      <td className="p-3">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            order.status === "Pago"
-                              ? "bg-green-100 text-green-700"
-                              : order.status === "Pendente"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-blue-100 text-blue-700"
-                          }`}
-                        >
-                          {order.status}
-                        </span>
-                      </td>
+            {loadingPedidos ? (
+              <div className="space-y-3">
+                {[...Array(4)].map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : pedidosData?.pedidos && pedidosData.pedidos.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-3 text-sm font-medium text-muted-foreground">Pedido</th>
+                      <th className="text-left p-3 text-sm font-medium text-muted-foreground">Cliente</th>
+                      <th className="text-left p-3 text-sm font-medium text-muted-foreground">Valor</th>
+                      <th className="text-left p-3 text-sm font-medium text-muted-foreground">Status</th>
+                      <th className="text-left p-3 text-sm font-medium text-muted-foreground">Data</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {pedidosData.pedidos.map((pedido: AdminPedido) => (
+                      <tr key={pedido.id} className="border-b hover:bg-muted/50">
+                        <td className="p-3 font-medium">#{pedido.numero}</td>
+                        <td className="p-3">{pedido.nome_cliente}</td>
+                        <td className="p-3">{formatCurrency(Number(pedido.total))}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(pedido.status)}`}>
+                            {getStatusLabel(pedido.status)}
+                          </span>
+                        </td>
+                        <td className="p-3 text-muted-foreground text-sm">
+                          {new Date(pedido.created_at).toLocaleDateString("pt-BR")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>Nenhum pedido encontrado</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
