@@ -13,7 +13,6 @@ import OrderConfirmed from "./pages/OrderConfirmed";
 import MeusPedidos from "./pages/MeusPedidos";
 import AcompanharPedido from "./pages/AcompanharPedido";
 import Enderecos from "./pages/Enderecos";
-import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminProducts from "./pages/admin/AdminProducts";
 import AdminProductForm from "./pages/admin/AdminProductForm";
@@ -41,12 +40,9 @@ const App = () => (
           <Route path="/pedido/:orderNumber" element={<AcompanharPedido />} />
           <Route path="/enderecos" element={<Enderecos />} />
           
-          {/* Login unificado */}
-          <Route path="/login" element={<Login />} />
-          
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/login" element={<Login />} />
+          <Route path="/admin/login" element={<AdminDashboard />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/produtos" element={<AdminProducts />} />
           <Route path="/admin/produtos/novo" element={<AdminProductForm />} />

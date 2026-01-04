@@ -1,6 +1,5 @@
-import { useEffect } from "react";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,24 +11,24 @@ import { QrCode, CreditCard, ShieldCheck, ArrowLeft, User, Loader2 } from "lucid
 import { useCart } from "@/hooks/useCart";
 import { useAuth } from "@/hooks/useAuth";
 import PaymentModal from "@/components/PaymentModal";
+import LoginModal from "@/components/LoginModal";
 
 const Checkout = () => {
-  const navigate = useNavigate();
   const { cartItems, getTotal } = useCart();
   const { user, isLoggedIn, isLoading } = useAuth();
   const [paymentMethod, setPaymentMethod] = useState<"pix" | "card">("pix");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [defaultToRegister, setDefaultToRegister] = useState(false);
 
   const subtotal = getTotal();
   const shipping = subtotal > 299 ? 0 : 29.9;
   const total = subtotal + shipping;
 
-  // Redirecionar para login se não estiver logado
+  // Recarregar estado do usuário quando o modal fechar
   useEffect(() => {
-    if (!isLoading && !isLoggedIn && cartItems.length > 0) {
-      // Não redireciona automaticamente, apenas mostra aviso
-    }
-  }, [isLoading, isLoggedIn, cartItems.length]);
+    // Força recarregamento do estado de autenticação
+  }, [showLoginModal]);
 
   if (isLoading) {
     return (
@@ -56,7 +55,7 @@ const Checkout = () => {
     );
   }
 
-  // Se não estiver logado, mostrar aviso
+  // Se não estiver logado, mostrar aviso com botões que abrem o modal
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-background">
@@ -72,11 +71,24 @@ const Checkout = () => {
               Assim podemos garantir a segurança do seu pedido e você poderá acompanhar o status da entrega.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button asChild size="lg">
-                <Link to="/login">Entrar na minha conta</Link>
+              <Button 
+                size="lg"
+                onClick={() => {
+                  setDefaultToRegister(false);
+                  setShowLoginModal(true);
+                }}
+              >
+                Entrar na minha conta
               </Button>
-              <Button variant="outline" asChild size="lg">
-                <Link to="/login?tab=register">Criar conta</Link>
+              <Button 
+                variant="outline" 
+                size="lg"
+                onClick={() => {
+                  setDefaultToRegister(true);
+                  setShowLoginModal(true);
+                }}
+              >
+                Criar conta
               </Button>
             </div>
             <div className="mt-6">
@@ -90,6 +102,12 @@ const Checkout = () => {
           </div>
         </main>
         <Footer />
+
+        <LoginModal 
+          isOpen={showLoginModal} 
+          onClose={() => setShowLoginModal(false)}
+          defaultToRegister={defaultToRegister}
+        />
       </div>
     );
   }
