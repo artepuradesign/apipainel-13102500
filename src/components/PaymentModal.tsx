@@ -17,11 +17,12 @@ import {
   Check,
   Loader2,
   ShieldCheck,
-  Mail,
+  User,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCart, CartItem } from "@/hooks/useCart";
 import { createPedido, updatePedidoStatus } from "@/services/pedidosApi";
+import { User as UserType } from "@/hooks/useAuth";
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ interface PaymentModalProps {
   subtotal: number;
   shipping: number;
   cartItems: CartItem[];
+  user: UserType | null;
 }
 
 const PaymentModal = ({
@@ -41,26 +43,22 @@ const PaymentModal = ({
   subtotal,
   shipping,
   cartItems,
+  user,
 }: PaymentModalProps) => {
   const navigate = useNavigate();
   const { clearCart } = useCart();
   const [isProcessing, setIsProcessing] = useState(false);
   const [pixGenerated, setPixGenerated] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [guestEmail, setGuestEmail] = useState("");
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
 
   const [cardData, setCardData] = useState({
     number: "",
-    name: "",
+    name: user?.nome?.toUpperCase() || "",
     expiry: "",
     cvv: "",
     installments: "1",
   });
-
-  // Check if user is logged in (mock - check localStorage)
-  const userEmail = localStorage.getItem("userEmail");
-  const isLoggedIn = !!userEmail;
 
   const finalTotal = paymentMethod === "pix" ? total * 0.95 : total;
   const discount = paymentMethod === "pix" ? total * 0.05 : 0;
@@ -78,16 +76,14 @@ const PaymentModal = ({
   };
 
   const handleGeneratePix = async () => {
-    if (!isLoggedIn && !guestEmail) {
-      toast.error("Por favor, informe seu email para continuar");
+    if (!user) {
+      toast.error("Usuário não autenticado");
       return;
     }
 
     setIsProcessing(true);
     try {
-      const customerEmail = isLoggedIn ? userEmail : guestEmail;
-      // Criar pedido com status "pendente" (compatível com o banco/API)
-      const numero = await saveOrderToAPI(customerEmail!, "pix", "pendente");
+      const numero = await saveOrderToAPI("pix", "pendente");
       setOrderNumber(numero);
       setPixGenerated(true);
       toast.success("Pedido registrado! Aguardando pagamento.");
@@ -107,7 +103,6 @@ const PaymentModal = ({
 
     setIsProcessing(true);
     try {
-      // Atualizar status para "pago"
       await updatePedidoStatus(orderNumber, "pago");
       clearCart();
       onClose();
@@ -144,8 +139,8 @@ const PaymentModal = ({
   const handleCardPayment = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!isLoggedIn && !guestEmail) {
-      toast.error("Por favor, informe seu email para continuar");
+    if (!user) {
+      toast.error("Usuário não autenticado");
       return;
     }
 
@@ -161,10 +156,7 @@ const PaymentModal = ({
 
     setIsProcessing(true);
     try {
-      const customerEmail = isLoggedIn ? userEmail : guestEmail;
-      // Criar pedido com status "pendente" (compatível com o banco/API)
-      const numero = await saveOrderToAPI(customerEmail!, "cartao", "pendente");
-      // Simular aprovação do cartão e atualizar para "pago"
+      const numero = await saveOrderToAPI("cartao", "pendente");
       await updatePedidoStatus(numero, "pago");
       
       clearCart();
@@ -181,16 +173,17 @@ const PaymentModal = ({
   };
 
   const saveOrderToAPI = async (
-    email: string,
     method: "pix" | "cartao" | "boleto",
     status: "pendente" | "pago" = "pendente"
   ): Promise<string> => {
-    // Usar nome do cartão se disponível, senão usar parte do email como nome
-    const nomeCliente = cardData.name || email.split('@')[0] || "Cliente";
+    if (!user) throw new Error("Usuário não autenticado");
 
     const result = await createPedido({
-      nome_cliente: nomeCliente,
-      email_cliente: email,
+      usuario_id: user.id,
+      nome_cliente: user.nome,
+      email_cliente: user.email,
+      telefone_cliente: user.telefone,
+      cpf_cliente: user.cpf,
       subtotal,
       desconto: discount,
       frete: shipping,
@@ -206,9 +199,6 @@ const PaymentModal = ({
         preco_unitario: item.price,
       })),
     });
-
-    // Também salvar no localStorage para compatibilidade
-    localStorage.setItem("customerEmail", email);
 
     return result.numero;
   };
@@ -233,32 +223,15 @@ const PaymentModal = ({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Email field for non-logged users */}
-          {!isLoggedIn && (
-            <div className="space-y-2 p-4 bg-muted rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Mail className="w-4 h-4 text-muted-foreground" />
-                <Label className="text-sm font-medium">
-                  Email para acompanhamento (opcional)
-                </Label>
+          {/* Dados do cliente logado */}
+          {user && (
+            <div className="p-3 bg-muted/50 rounded-lg text-sm flex items-center gap-2">
+              <User className="w-4 h-4 text-muted-foreground" />
+              <div>
+                <span className="text-muted-foreground">Cliente: </span>
+                <strong>{user.nome}</strong>
+                <span className="text-muted-foreground ml-2">({user.email})</span>
               </div>
-              <Input
-                type="email"
-                placeholder="seu@email.com"
-                value={guestEmail}
-                onChange={(e) => setGuestEmail(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Informe seu email para receber atualizações e acompanhar seu pedido
-              </p>
-            </div>
-          )}
-
-          {isLoggedIn && (
-            <div className="p-3 bg-muted/50 rounded-lg text-sm">
-              <p className="text-muted-foreground">
-                Pedido será registrado para: <strong>{userEmail}</strong>
-              </p>
             </div>
           )}
 
@@ -516,9 +489,9 @@ const PaymentModal = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted p-3 rounded-lg">
-            <ShieldCheck className="w-4 h-4 text-green-600 shrink-0" />
-            <span>Compra 100% segura</span>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground p-3 bg-muted rounded-lg">
+            <ShieldCheck className="w-4 h-4 text-green-600" />
+            <span>Pagamento 100% seguro</span>
           </div>
         </div>
       </DialogContent>

@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,18 +8,40 @@ import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { QrCode, CreditCard, ShieldCheck, ArrowLeft } from "lucide-react";
+import { QrCode, CreditCard, ShieldCheck, ArrowLeft, User, Loader2 } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
+import { useAuth } from "@/hooks/useAuth";
 import PaymentModal from "@/components/PaymentModal";
 
 const Checkout = () => {
+  const navigate = useNavigate();
   const { cartItems, getTotal } = useCart();
+  const { user, isLoggedIn, isLoading } = useAuth();
   const [paymentMethod, setPaymentMethod] = useState<"pix" | "card">("pix");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const subtotal = getTotal();
   const shipping = subtotal > 299 ? 0 : 29.9;
   const total = subtotal + shipping;
+
+  // Redirecionar para login se não estiver logado
+  useEffect(() => {
+    if (!isLoading && !isLoggedIn && cartItems.length > 0) {
+      // Não redireciona automaticamente, apenas mostra aviso
+    }
+  }, [isLoading, isLoggedIn, cartItems.length]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container py-16 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   if (cartItems.length === 0) {
     return (
@@ -27,6 +50,44 @@ const Checkout = () => {
         <main className="container py-16 text-center">
           <h1 className="text-xl md:text-2xl font-semibold mb-4">Carrinho vazio</h1>
           <Link to="/"><Button>Voltar para a loja</Button></Link>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Se não estiver logado, mostrar aviso
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container py-8 md:py-16">
+          <div className="max-w-md mx-auto text-center">
+            <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
+              <User className="w-10 h-10 text-muted-foreground" />
+            </div>
+            <h1 className="text-2xl font-semibold mb-4">Faça login para continuar</h1>
+            <p className="text-muted-foreground mb-8">
+              Para finalizar sua compra, você precisa estar logado em sua conta. 
+              Assim podemos garantir a segurança do seu pedido e você poderá acompanhar o status da entrega.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button asChild size="lg">
+                <Link to="/login">Entrar na minha conta</Link>
+              </Button>
+              <Button variant="outline" asChild size="lg">
+                <Link to="/login?tab=register">Criar conta</Link>
+              </Button>
+            </div>
+            <div className="mt-6">
+              <Button variant="ghost" asChild>
+                <Link to="/carrinho">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Voltar ao carrinho
+                </Link>
+              </Button>
+            </div>
+          </div>
         </main>
         <Footer />
       </div>
@@ -45,6 +106,35 @@ const Checkout = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
           <div className="lg:col-span-2 space-y-4 md:space-y-6">
+            {/* Dados do cliente logado */}
+            <Card>
+              <CardHeader className="p-4 md:p-6">
+                <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                  <User className="w-5 h-5" />
+                  Dados do Cliente
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 md:p-6 pt-0">
+                <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Nome:</span>
+                    <span className="font-medium">{user?.nome}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Email:</span>
+                    <span className="font-medium">{user?.email}</span>
+                  </div>
+                  {user?.telefone && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Telefone:</span>
+                      <span className="font-medium">{user?.telefone}</span>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Forma de pagamento */}
             <Card>
               <CardHeader className="p-4 md:p-6">
                 <CardTitle className="text-base md:text-lg">Forma de Pagamento</CardTitle>
@@ -132,6 +222,7 @@ const Checkout = () => {
         subtotal={subtotal}
         shipping={shipping}
         cartItems={cartItems}
+        user={user}
       />
     </div>
   );

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,10 +10,13 @@ import { toast } from "sonner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { API_BASE_URL } from "@/services/api";
+import { useAuth } from "@/hooks/useAuth";
 
 const Login = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("login");
+  const [searchParams] = useSearchParams();
+  const { login, isLoggedIn } = useAuth();
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") === "register" ? "register" : "login");
   
   // Login state
   const [loginEmail, setLoginEmail] = useState("");
@@ -29,6 +32,21 @@ const Login = () => {
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
   const [registerLoading, setRegisterLoading] = useState(false);
   const [registerError, setRegisterError] = useState("");
+
+  // Redirecionar se já estiver logado
+  useEffect(() => {
+    if (isLoggedIn) {
+      navigate("/meus-pedidos");
+    }
+  }, [isLoggedIn, navigate]);
+
+  // Atualizar tab quando URL mudar
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "register") {
+      setActiveTab("register");
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,9 +71,8 @@ const Login = () => {
         throw new Error(data.error || 'Email ou senha incorretos');
       }
 
-      // Salvar token e dados do usuário (padrão do app)
-      localStorage.setItem("token", data.data.token);
-      localStorage.setItem("usuario", JSON.stringify(data.data.usuario));
+      // Usar hook de autenticação
+      login(data.data.usuario, data.data.token);
 
       // Se for admin, salvar também como adminToken para páginas administrativas
       if (data.data.usuario.tipo === 'admin') {
@@ -63,11 +80,6 @@ const Login = () => {
         sessionStorage.setItem("adminUser", JSON.stringify(data.data.usuario));
         localStorage.setItem("adminToken", data.data.token);
         localStorage.setItem("adminUser", JSON.stringify(data.data.usuario));
-      } else {
-        sessionStorage.removeItem("adminToken");
-        sessionStorage.removeItem("adminUser");
-        localStorage.removeItem("adminToken");
-        localStorage.removeItem("adminUser");
       }
 
       toast.success("Login realizado com sucesso!");
@@ -102,13 +114,36 @@ const Login = () => {
       return;
     }
 
-    // Simular cadastro - implementar endpoint de registro
-    setTimeout(() => {
-      toast.success("Conta criada com sucesso! Faça login para continuar.");
-      setActiveTab("login");
-      setLoginEmail(registerEmail);
+    try {
+      const response = await fetch(`${API_BASE_URL}/cadastro.php`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nome: registerName,
+          email: registerEmail,
+          telefone: registerPhone,
+          senha: registerPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Erro ao criar conta');
+      }
+
+      // Login automático após cadastro
+      login(data.data.usuario, data.data.token);
+      
+      toast.success("Conta criada com sucesso!");
+      navigate("/meus-pedidos");
+    } catch (err: any) {
+      setRegisterError(err.message || 'Erro ao criar conta');
+    } finally {
       setRegisterLoading(false);
-    }, 1500);
+    }
   };
 
   return (
