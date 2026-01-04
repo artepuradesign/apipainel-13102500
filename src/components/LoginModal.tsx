@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { X, Lock, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Lock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,16 +15,24 @@ import { useNavigate } from "react-router-dom";
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
+  defaultToRegister?: boolean;
 }
 
-const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
-  const [isLogin, setIsLogin] = useState(true);
+const LoginModal = ({ isOpen, onClose, defaultToRegister = false }: LoginModalProps) => {
+  const [isLogin, setIsLogin] = useState(!defaultToRegister);
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Sincronizar estado com prop quando modal abre
+  useEffect(() => {
+    if (isOpen) {
+      setIsLogin(!defaultToRegister);
+    }
+  }, [isOpen, defaultToRegister]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,11 +86,13 @@ const LoginModal = ({ isOpen, onClose }: LoginModalProps) => {
       setPassword("");
       onClose();
 
-      // Redirecionar baseado no tipo de usuário
+      // Recarregar a página para atualizar o estado de autenticação
+      // Isso garante que o useAuth detecte o novo login
       if (data.data.usuario.tipo === 'admin') {
-        navigate('/admin/dashboard');
+        window.location.href = '/admin/dashboard';
       } else {
-        navigate('/meus-pedidos');
+        // Se estiver no checkout, apenas recarregar para continuar a compra
+        window.location.reload();
       }
 
     } catch (error: any) {
